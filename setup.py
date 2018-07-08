@@ -9,8 +9,8 @@ from setuptools.command.install import (
 VERSION = "0.0.2"
 
 
-with open("README.rst", "r") as fh:
-    long_description = fh.read()
+with open("README.md", "r") as fh:
+    README = fh.read()
 
 
 class VerifyVersionCommand(install):
@@ -46,7 +46,7 @@ setuptools.setup(
         "eth-account==0.2.3",
         "ipfsapi==0.4.3"
     ],
-    long_description=long_description,
+    long_description=README,
     url="https://github.com/mikery/python-request-network",
     packages=setuptools.find_packages(exclude=["tests", "tests.*"]),
     include_package_data=True,
