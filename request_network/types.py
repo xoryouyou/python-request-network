@@ -15,7 +15,8 @@ from web3 import Web3
 
 from request_network.constants import (
     EMPTY_BYTES_20,
-    PAYMENT_GATEWAY_BASE_URL)
+    PAYMENT_GATEWAY_BASE_URL,
+)
 
 
 class Roles(IntEnum):

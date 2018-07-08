@@ -47,7 +47,7 @@ setuptools.setup(
         "ipfsapi==0.4.3"
     ],
     long_description=long_description,
-    url="https://github.com/mikery/request-network",
+    url="https://github.com/mikery/python-request-network",
     packages=setuptools.find_packages(exclude=["tests", "tests.*"]),
     include_package_data=True,
     classifiers=(

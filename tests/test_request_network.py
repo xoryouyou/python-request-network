@@ -27,7 +27,6 @@ from request_network.types import (
     Roles,
 )
 
-
 test_token_address = '0x345ca3e014aaf5dca488057592ee47305d9b3e10'
 test_account = '0x1b77F92aaEEE6249358907E1D33ae52F424D6292'
 test_amounts = [
