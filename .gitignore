@@ -1,0 +1,10 @@
+.idea
+*.pyc
+venv
+docs/_build
+.coverage
+.tox
+htmlcov
+*.egg-info
+build
+dist
