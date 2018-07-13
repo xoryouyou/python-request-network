@@ -8,7 +8,7 @@ from web3.auto import (
 
 
 class ArtifactManager(object):
-    """ Helper class for retrieving information about smart contract artifacts.
+    """ Provices access to smart contract artifacts.
     """
     artifacts = None
     artifact_directory = None
@@ -22,6 +22,7 @@ class ArtifactManager(object):
         :param artifact_directory: Path to the directory containing smart contract
         artifacts. Defaults to the `artifacts` subdirectory of the package.
         """
+        # TODO take network name and artifact path as env vars
         self.ethereum_network = ethereum_network
 
         if not artifact_directory:
@@ -37,7 +38,6 @@ class ArtifactManager(object):
     def get_service_class_by_address(self, address):
         """ Given the address of a currency contract, return the related service class.
 
-        :param ethereum_network:
         :param address:
         :return: The service class to use for the given currency contract address.
         """
@@ -55,19 +55,18 @@ class ArtifactManager(object):
             raise NotImplementedError()
 
     def get_contract_instance(self, name):
-        """
+        """ Helper function to return a `web3.eth.Contract` instance of the specified contract.
 
         :param name:
         :return:
         :rtype: web3.eth.Contract
         """
-        data = self.get_contract_data(name)
-        return w3.eth.contract(abi=data['abi'], address=data['address'])
+        return self.get_contract_data(name)['instance']
 
     def get_contract_data(self, name):
         """ Return a dict describing the contract related to artifact `name`.
 
-        `name` might be an ERC20 token address, or something like `RequestEthereum`.
+        `name` might be an ERC20 token address, or an identifier such as `RequestEthereum`.
 
         :param name:
         :return:

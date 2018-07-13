@@ -87,6 +87,8 @@ class RequestCoreService(object):
         # `defunct_hash_message` is used to maintain compatibility with `web3Single.sign()`
         message_hash = defunct_hash_message(hexstr=request_hash)
         # TODO make signing strategy configurable
+        # TODO signer should accept an optional dict describing the Request atttributes so
+        # it can perform enforce controls (rate-limiting, max Request amount, etc.)
         signer_function = private_key_environment_variable_signer
         signed_message = signer_function(
             message_hash=message_hash,

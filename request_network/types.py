@@ -51,6 +51,9 @@ class Payment(object):
         self.payee_index = payee_index
         self.delta_amount = delta_amount
 
+    def __repr__(self):
+        return "{}:{}".format(self.payee_index, self.delta_amount)
+
 
 class Payee(object):
     id_address = None
@@ -70,24 +73,6 @@ class Payee(object):
 
 # TODO need to rethink this class. What is the best canonical representation?
 class Request(object):
-    id = None
-    creator = None
-    currency_contract_address = None
-    ipfs_hash = None
-    data = None
-    payer = None
-    payee = None
-    state = None
-    sub_payees = None
-
-    id_addresses = None
-    payment_address = None
-    amounts = None
-    expiration_date = None
-    signature = None
-    hash = None
-    payments = None
-
     def __init__(self, currency_contract_address, ipfs_hash, data, payer,
                  payee, sub_payees,
                  _id=None, creator=None, state=None,
@@ -102,6 +87,10 @@ class Request(object):
             As a convenience those fields are derived from the given values and stored
             on the object, although that makes the interface slightly different to the
             JS version.
+
+            TODO refactor plan - take a list of payees in constructor. use properties
+            so that request.payee returns payees[0], to support the "contract style"
+            interface.
 
             :type payments: [request_network.types.Payment]
         """
@@ -127,6 +116,16 @@ class Request(object):
         self.id_addresses = [self.payee['id_address'], *sub_payee_id_addresses]
         self.payment_addresses = [self.payee['payment_address'], *sub_payee_payment_addresses]
         self.amounts = [str(self.payee['amount']), *sub_payee_amounts]
+
+    @classmethod
+    def from_request_id(cls, request_id):
+        # get instance from a request ID
+        raise NotImplementedError()
+
+    @classmethod
+    def from_transaction_hash(cls, transaction_hash):
+        # get instance from tx hash
+        raise NotImplementedError()
 
     def as_base64(self, callback_url, ethereum_network):
         """ Return the base64-encoded JSON string required by the payment gateway.
