@@ -1,10 +1,17 @@
+import json
+
+import os
+
+import ipfsapi
 from eth_abi import decode_abi
 from eth_utils import add_0x_prefix, remove_0x_prefix, event_abi_to_log_topic
 from web3 import Web3
 from web3.auto import w3
+from web3.exceptions import MismatchedABI
 from web3.utils.abi import map_abi_data
 from web3.utils.contracts import find_matching_event_abi
 from web3.utils.encoding import hex_encode_abi_type
+from web3.utils.events import get_event_data
 from web3.utils.normalizers import abi_ens_resolver
 
 from request_network.artifact_manager import ArtifactManager
@@ -182,6 +189,7 @@ class RequestNetwork(object):
             address=core_contract_address,
             abi=core_contract_data['abi'])
 
+        # TODO named tuple
         result = core_contract.functions.getRequest(request_id).call()
         request_data = {
             '_id': request_id,
@@ -215,57 +223,51 @@ class RequestNetwork(object):
         sub_payees_count = core_contract.functions.getSubPayeesCount(request_id).call()
         request_data['sub_payees'] = []
         for i in range(sub_payees_count):
-            data = core_contract.functions.subPayees(request_id, i).call()
+            (address, amount, balance) = core_contract.functions.subPayees(request_id, i).call()
             request_data['sub_payees'].append({
-                'id_address': data['addr'],
+                'id_address': address,
                 'payment_address': service_contract.call().payeesPaymentAddress(request_id, i + 1),
-                'balance': data['balance'],
-                'amount': data['amount'],
-
+                'balance': balance,
+                'amount': amount
             })
 
-        # Get the ABI of the Created event so we can calculate the log topic
-        created_logs = self.get_logs_for_request(
-            request_id=request_id,
-            event_name='Created',
-            start_block_number=block_number if block_number else core_contract_data['block_number'],
-            core_contract=core_contract)
+        created_logs = core_contract.events.Created().createFilter(
+            fromBlock=block_number if block_number else core_contract_data['block_number'],
+            argument_filters={
+                'requestId': Web3.toBytes(hexstr=request_id)
+            }
+        ).get_all_entries()
 
         if len(created_logs) == 0:
             raise Exception('Could not get Created event for Request {}'.format(request_id))
         if len(created_logs) > 1:
             raise Exception('Multiple logs returned for Request {}'.format(request_id))
 
-        tx_receipt = w3.eth.getTransactionReceipt(Web3.toHex(created_logs[0]['transactionHash']))
-        rich_logs = core_contract.events.Created().processReceipt(tx_receipt)
-        created_log_args = rich_logs[0]['args']
-        request_data['creator'] = created_log_args['creator']
+        request_data['creator'] = created_logs[0].args.creator
         # See if we have an IPFS hash, and get the file if so
-        if created_log_args['data'] != '':
-            request_data['ipfs_hash'] = created_log_args['data']
-            # TODO retrieve data from IPFS
+        if created_logs[0].args.data != '':
+            ipfs = ipfsapi.connect(
+                host=os.environ.get('IPFS_NODE_HOST', 'localhost'),
+                port=os.environ.get('IPFS_NODE_PORT', 5001))
+
+            request_data['ipfs_hash'] = created_logs[0].args.data
+            request_data['data'] = json.loads(ipfs.cat(request_data['ipfs_hash']))
         else:
             request_data['ipfs_hash'] = None
             request_data['data'] = {}
 
         # Iterate through UpdateBalance events to build a list of payments made for this request
-        update_balance_logs = self.get_logs_for_request(
-            request_id=request_id,
-            event_name='UpdateBalance',
-            start_block_number=block_number if block_number else core_contract_data['block_number'],
-            core_contract=core_contract)
-
-        for log in update_balance_logs:
-            tx_receipt = w3.eth.getTransactionReceipt(Web3.toHex(log['transactionHash']))
-            rich_logs = core_contract.events.UpdateBalance().processReceipt(tx_receipt)
+        balance_update_logs = core_contract.events.UpdateBalance().createFilter(
+            fromBlock=block_number if block_number else core_contract_data['block_number'],
+            argument_filters={
+                'requestId': Web3.toBytes(hexstr=request_id)
+            }
+        ).get_all_entries()
+        for log in balance_update_logs:
             request_data['payments'].append(Payment(
-                payee_index=rich_logs[0]['args']['payeeIndex'],
-                delta_amount=str(rich_logs[0]['args']['deltaAmount']))
+                payee_index=log.args.payeeIndex,
+                delta_amount=log.args.deltaAmount)
             )
-
-        if request_data['ipfs_hash']:
-            # TODO get data from IPFS
-            request_data['data'] = {'foo': 'bar'}
 
         return Request(**request_data)
 
@@ -298,24 +300,19 @@ class RequestNetwork(object):
             raise TransactionNotFound(transaction_hash)
 
         am = ArtifactManager(ethereum_network=self.ethereum_network)
-        currency_contract_address = tx_data['to']
-        currency_contract_data = am.get_contract_data(currency_contract_address)
+        currency_contract = am.get_contract_instance(tx_data['to'])
 
-        currency_contract = w3.eth.contract(abi=currency_contract_data['abi'])
-
-        # Look up the function by its signature so we can use its ABI
-        function_signature = tx_data['input']
-        func = currency_contract.get_function_by_selector(function_signature[:10])
-        input_types = [i['type'] for i in func.abi['inputs']]
-        input_names = [i['name'] for i in func.abi['inputs']]
-        input_values = decode_abi(input_types, Web3.toBytes(hexstr=tx_data['input'][10:]))
-        inputs = dict(zip(input_names, input_values))
-
-        # some above code might be better in RequestNetwork object? maybe this whole function?
+        # Decode the transaction input data to get the function arguments
+        func = currency_contract.get_function_by_selector(tx_data['input'][:10])
+        arg_types = [i['type'] for i in func.abi['inputs']]
+        arg_names = [i['name'] for i in func.abi['inputs']]
+        arg_values = decode_abi(arg_types, Web3.toBytes(hexstr=tx_data['input'][10:]))
+        function_args = dict(zip(arg_names, arg_values))
 
         # If this is a 'simple' Request we can take the ID from the transaction input.
-        if '_requestId' in inputs:
-            return self.get_request_by_id(inputs['_requestId'])
+        if '_requestId' in function_args:
+            return self.get_request_by_id(
+                Web3.toHex(function_args['_requestId']))
 
         # For more complex Requests (e.g. those created by broadcasting a signed Request)
         # we need to find the 'Created' event log that was emitted and take the ID from there.
@@ -323,16 +320,13 @@ class RequestNetwork(object):
         if not tx_receipt:
             raise Exception('TODO could not get tx receipt')
 
-        # TODO safe to assume that this will always be the first log?
-        core_contract_data = am.get_contract_data(tx_receipt['logs'][0]['address'])
-        # Get an instance of the core contract and use it to decode the events in the tx_receipt
-        core_contract = w3.eth.contract(abi=core_contract_data['abi'])
-        # rich_logs contain the full decoded data emitted with the event
-        rich_logs = core_contract.events.Created().processReceipt(tx_receipt)
-        # The first log item contains the requestId
-        # TODO confirm we can rely on this being in the first log
-        event_data = rich_logs[0].args
+        # Extract the event args from the tx_receipt to retrieve the request_id
+        core_contract = am.get_contract_instance(tx_receipt['logs'][0].address)
+        # See note in related test function re Solidity bug
+        # https://github.com/ethereum/solidity/issues/3493
+        logs = core_contract.events.Created().processReceipt(tx_receipt)
+        request_id = logs[0].args.requestId
 
         return self.get_request_by_id(
-            Web3.toHex(event_data.requestId),
+            Web3.toHex(request_id),
             block_number=tx_data['blockNumber'])

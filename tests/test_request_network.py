@@ -1,6 +1,9 @@
+from unittest import mock
+
 import os
 import unittest
 
+from eth_abi.decoding import StringDecoder, decode_uint_256
 from eth_account.messages import (
     defunct_hash_message,
 )
@@ -56,9 +59,34 @@ payees = [
 expiration_date = 7952342400000
 
 
+class TestCreateRequestAsPayee(unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        # TODO remove
+        private_key_env_var = 'REQUEST_NETWORK_PRIVATE_KEY_0x821aEa9a577a9b44299B9c15c88cf3087F3b5544'
+        os.environ[private_key_env_var] = 'c88b703fb08cbea894b6aeff5a544fb92e78a18e19814cd85da83b71f772aa6c'
+        self.request_api = RequestNetwork(ethereum_network=EthereumNetworks.private)
+
+    def test_create_request_as_payee(self):
+        request = self.request_api.create_request_as_payee(
+            'token address if erc20',
+            'payees',
+            'payer',
+            'payer refund address',
+            'data',
+            'options'
+        )
+
+        self.assertIsNotNone(request.transaction_hash)
+        self.assertIsNotNone(request.id)
+
+
+
+
 class TestSignRequestAsPayee(unittest.TestCase):
     def setUp(self):
         super().setUp()
+        # TODO remove
         private_key_env_var = 'REQUEST_NETWORK_PRIVATE_KEY_0x821aEa9a577a9b44299B9c15c88cf3087F3b5544'
         os.environ[private_key_env_var] = 'c88b703fb08cbea894b6aeff5a544fb92e78a18e19814cd85da83b71f772aa6c'
         self.request_api = RequestNetwork(ethereum_network=EthereumNetworks.private)
@@ -134,50 +162,122 @@ class TestSignRequestAsPayee(unittest.TestCase):
 
 
 class GetRequestTestCase(unittest.TestCase):
-    # TODO test with ganache instead of infura - the get_request_by_* tests are using
-    # a known transaction on Rinkeby, but they should be using a tx from request.js' test suite
+    """ These tests are using transactions created by running the RequestNetwork.js
+        test suite.
+    """
+
     def setUp(self):
         super().setUp()
-        os.environ['WEB3_PROVIDER_URI'] = 'https://rinkeby.infura.io/{}'.format(os.environ['INFURA_API_KEY'])
-        # Insert POA middleware so we can work with Rinkeby
-        w3.middleware_stack.inject(geth_poa_middleware, layer=0)
-        self.request_api = RequestNetwork(ethereum_network=EthereumNetworks.rinkeby)
-
-    def tearDown(self):
-        super().tearDown()
-        w3.middleware_stack.remove(geth_poa_middleware)
+        self.request_api = RequestNetwork(ethereum_network=EthereumNetworks.private)
 
     def test_hash_request_object(self):
         request = self.request_api.get_request_by_transaction_hash(
-            '0xbb0a82e551c590013ce8eb53be06936c694dd28749cd679092b76dc7388cb9ed')
+            '0x2c98588e792da8dec816e625cb7a6d014ad0e510684d4fff5166715ea61efa09')
         # monkey patch expiration, because I don't think it is stored after request is signed/broadcast
+        # Manually add the expiration date as it is not stored on the contract
         request.expiration_date = expiration_date
-
         self.request_api.hash_request_object(request)
 
     def test_get_request_by_id(self):
         request = self.request_api.get_request_by_id(
-            '0x8fc2e7f2498f1d06461ee2d547002611b801202b0000000000000000000003e4')
+            '0x8cdaf0cd259887258bc13a92c0a6da92698644c000000000000000000000026b')
         self.assertEqual(
-            '0x627306090abaB3A6e1400e9345bC60c78a8BEf57',
+            '0xC5fdf4076b8F3A5357c5E395ab970B5B54098Fef',
             request.payer['address']
         )
         self.assertEqual(
-            '100000000000000',
+            100000000,
             request.payments[0].delta_amount
-        )
-        self.assertEqual(
-            True,
-            request.is_paid()
         )
 
     def test_get_request_by_transaction_hash(self):
-        request = self.request_api.get_request_by_transaction_hash('0xbb0a82e551c590013ce8eb53be06936c694dd28749cd679092b76dc7388cb9ed')
-        self.assertEqual(
-            '0x627306090abaB3A6e1400e9345bC60c78a8BEf57',
-            request.payer['address']
-        )
+        with mock.patch.object(
+                StringDecoder,
+                'read_data_from_stream',
+                new=read_padded_data_from_stream):
+            request = self.request_api.get_request_by_transaction_hash(
+                # 'simple' request
+                # '0x1f97459c45402fcb6562410cf4b4253a9d5d9528f247a892f9bddeefdd878b2d')
+                # 'complex' request, with data
+                '0x809bab406bf6251e49cb04c2e3e99d52dacec3b1b6ec89557ca1c4d0b71d3fec')
+            self.assertEqual(
+                '0x0F4F2Ac550A1b4e2280d04c21cEa7EBD822934b5',
+                request.payer['address']
+            )
+            self.assertEqual(
+                {'reason': 'weed purchased'},
+                request.data
+            )
 
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def read_padded_data_from_stream(self, stream):
+    """
+        For some reason the IPFS hash is not encoded correctly when we retrieve
+        it from the core_contract's events. This worked previously when testing
+        against a signed request. Appears to be this bug:
+
+        https://github.com/ethereum/web3.py/issues/602
+        https://github.com/ethereum/solidity/issues/3493
+
+        Carver reported a bug in solidity - data from logs differs if the event
+        is emitted during an external or internal solidity function call.
+
+        `broadcastSignedRequestAsPayerAction` calls `createAcceptAndPayFromBytes`,
+        which is internal, and calls `requestCore.createRequestFromBytes`.
+
+        But then `createRequestAsPayeeAction` calls `createCoreRequestInternal`
+        on the currency contract, which is also internal and then calls
+        `requestCore.createRequest`.
+
+        The event/tx contains 'QmbFpULNpMJEj9LfvhH4hSTfTse5YrS2JvhbHW6bDCNpwS',
+        but it seems that it should contain the padded value
+        'QmbFpULNpMJEj9LfvhH4hSTfTse5YrS2JvhbHW6bDCNpwS\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+
+        Is it possible that this happens because of slightly different code paths
+        between broadcastSignedRequestAsPayee and createAcceptRequest?
+
+        The former extracts the data string (IPFS hash) from the bytes-encoded
+        Request. The latter uses a string passed by the library.
+        slightly different code paths - first one pulls data from requestbytes
+        second one uses data as a string throughout
+
+    :param self:
+    :param stream:
+    :return:
+    """
+    from eth_abi.utils.numeric import ceil32
+    data_length = decode_uint_256(stream)
+    padded_length = ceil32(data_length)
+
+    data = stream.read(padded_length)
+    # Start hack
+    # Manually pad data to force it to desired length
+    if len(data) < padded_length:
+        data += b'\x00' * (padded_length - data_length)
+    # Example:
+    # if data == b'QmbFpULNpMJEj9LfvhH4hSTfTse5YrS2JvhbHW6bDCNpwS':
+    #     data = b'QmbFpULNpMJEj9LfvhH4hSTfTse5YrS2JvhbHW6bDCNpwS\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+    # End hack
+
+    if len(data) < padded_length:
+        from eth_abi.exceptions import InsufficientDataBytes
+        raise InsufficientDataBytes(
+            "Tried to read {0} bytes.  Only got {1} bytes".format(
+                padded_length,
+                len(data),
+            )
+        )
+
+    padding_bytes = data[data_length:]
+
+    if padding_bytes != b'\x00' * (padded_length - data_length):
+        from eth_abi.exceptions import NonEmptyPaddingBytes
+        raise NonEmptyPaddingBytes(
+            "Padding bytes were not empty: {0}".format(repr(padding_bytes))
+        )
+
+    return data[:data_length]
