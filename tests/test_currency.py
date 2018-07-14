@@ -7,9 +7,6 @@ from request_network.currencies import (
 from request_network.services.ERC20 import (
     RequestERC20Service,
 )
-from request_network.types import (
-    EthereumNetworks,
-)
 
 
 class CurrencyTestCase(unittest.TestCase):
@@ -23,5 +20,5 @@ class CurrencyTestCase(unittest.TestCase):
 
     def test_get_service_class(self):
         dai = currencies_by_symbol['DAI']
-        service = dai.get_service_class(ethereum_network=EthereumNetworks.rinkeby)
+        service = dai.get_service_class()
         self.assertTrue(isinstance(service, RequestERC20Service))

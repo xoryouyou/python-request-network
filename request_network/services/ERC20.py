@@ -11,8 +11,8 @@ from request_network.services.core import (
 class RequestERC20Service(RequestCoreService):
     token_address = None
 
-    def __init__(self, request_api, token_address):
-        super().__init__(request_api)
+    def __init__(self, token_address):
+        super().__init__()
         self.token_address = token_address
 
     def get_currency_contract_artifact_name(self):

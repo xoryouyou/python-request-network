@@ -6,31 +6,38 @@ from web3.auto import (
     w3,
 )
 
+from request_network.constants import (
+    ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
+    NETWORK_NAME_ENVIRONMENT_VARIABLE,
+)
+from request_network.exceptions import (
+    ArtifactNotFound,
+)
+
 
 class ArtifactManager(object):
-    """ Provices access to smart contract artifacts.
+    """ Provides access to smart contract artifacts.
     """
     artifacts = None
     artifact_directory = None
     ethereum_network = None
 
     # TODO convert artifacts into lazy property
-    def __init__(self, ethereum_network=None, artifact_directory=None):
+    def __init__(self):
         """
-        :param ethereum_network: Ethereum network
-        :type ethereum_network: request_network.types.EthereumNetwork
-        :param artifact_directory: Path to the directory containing smart contract
-        artifacts. Defaults to the `artifacts` subdirectory of the package.
         """
-        # TODO take network name and artifact path as env vars
-        self.ethereum_network = ethereum_network
+        try:
+            self.ethereum_network = os.environ[NETWORK_NAME_ENVIRONMENT_VARIABLE]
+        except KeyError:
+            self.ethereum_network = 'private'
 
-        if not artifact_directory:
+        try:
+            self.artifact_directory = os.environ[ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE]
+        except KeyError:
+            # Environment variable not set, using default
             self.artifact_directory = os.path.join(
                 os.path.dirname(os.path.realpath(__file__)),
                 'artifacts')
-        else:
-            self.artifact_directory = artifact_directory
 
         with open(os.path.join(self.artifact_directory, 'artifacts.json')) as f:
             self.artifacts = json.load(f)
@@ -45,7 +52,12 @@ class ArtifactManager(object):
         from request_network.services import RequestERC20Service, RequestEthereumService
 
         address = address.lower()
-        contract_artifact_path = self.artifacts[self.ethereum_network.name][address]
+        try:
+            contract_artifact_path = self.artifacts[self.ethereum_network][address]
+        except KeyError:
+            raise ArtifactNotFound(
+                'Could not find artifact for "{}" on {} network'.format(
+                    address, self.ethereum_network))
 
         if 'RequestERC20' in contract_artifact_path:
             return RequestERC20Service
@@ -75,26 +87,26 @@ class ArtifactManager(object):
         # Force name to lowercase in case it includes a checksummed address
         name = name.lower()
         try:
-            network_artifacts = self.artifacts[self.ethereum_network.name]
+            network_artifacts = self.artifacts[self.ethereum_network]
         except KeyError:
-            raise Exception(
-                'Could not find artifacts for {} network'.format(self.ethereum_network.name))
+            raise ArtifactNotFound(
+                'Could not find artifacts for {} network'.format(self.ethereum_network))
         try:
             contract_artifact_path = network_artifacts[name]
         except KeyError:
-            raise Exception(
+            raise ArtifactNotFound(
                 'Could not find artifact for "{}" on {} network'.format(
-                    name, self.ethereum_network.name))
+                    name, self.ethereum_network))
 
         with open(os.path.join(self.artifact_directory, contract_artifact_path)) as f:
             contract_artifact = json.load(f)
 
         try:
-            network_data = contract_artifact['networks'][self.ethereum_network.name]
+            network_data = contract_artifact['networks'][self.ethereum_network]
         except KeyError:
-            raise Exception(
+            raise ArtifactNotFound(
                 'Could not find artifact for "{}" on {} network'.format(
-                    name, self.ethereum_network.name))
+                    name, self.ethereum_network))
 
         return {
             'abi': contract_artifact['abi'],

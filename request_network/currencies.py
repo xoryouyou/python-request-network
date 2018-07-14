@@ -10,22 +10,17 @@ class Currency(object):
         self.decimals = decimals
         self.request_service_class = request_service_class
 
-    def get_service_class(self, ethereum_network):
+    def get_service_class(self):
         """ :returns An instance of the service for this currency
             :rtype request_network.services.RequestCoreService
         """
-        # TODO do not commit, hacky testing
-        from request_network import RequestNetwork
-
         # https://stackoverflow.com/a/547867/394423
         components = 'request_network.services'.split('.')
         mod = __import__(components[0])
         for comp in components[1:]:
             mod = getattr(mod, comp)
         service_class = getattr(mod, self.request_service_class)
-        return service_class(
-            request_api=RequestNetwork(ethereum_network=ethereum_network),
-            **self.get_service_instance_kwargs())
+        return service_class(**self.get_service_instance_kwargs())
 
     def get_service_instance_kwargs(self):
         return {}

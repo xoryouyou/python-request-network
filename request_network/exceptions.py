@@ -16,3 +16,15 @@ class RequestNotFound(BaseException):
 
 class TransactionNotFound(BaseException):
     pass
+
+
+class IPFSConnectionFailed(BaseException):
+    pass
+
+
+class RoleNotSupported(BaseException):
+    pass
+
+
+class ArtifactNotFound(BaseException):
+    pass

@@ -2,7 +2,6 @@ from base64 import (
     b64encode,
 )
 from enum import (
-    Enum,
     IntEnum,
 )
 import json
@@ -31,18 +30,6 @@ class States(IntEnum):
     CANCELED = 3
 
 
-class EthereumNetworks(Enum):
-    main = (1, )
-    rinkeby = (4, )
-    private = (99, )
-
-    def __init__(self, network_id):
-        self.network_id = network_id
-
-    def __repr__(self):
-        return self.name
-
-
 class Payment(object):
     payee_index = None
     delta_amount = None
@@ -56,11 +43,19 @@ class Payment(object):
 
 
 class Payee(object):
-    id_address = None
-    payment_address = None
-    amount = None
+    def __init__(self, id_address, payment_address, amount,
+                 additional_amount=None, payment_amount=None, balance=None,
+                 paid_amount=None):
+        """
 
-    def __init__(self, id_address, payment_address, amount):
+        :param id_address:
+        :param payment_address:
+        :param amount: Expected amount to be paid for this Request
+        :param additional_amount: Extra amount, on top of expected amount
+        :param payment_amount: Amount to pay at creation when Request is created by payer
+        :param paid_amount: Track how much has been paid to this payee
+        """
+
         if payment_address:
             payment_address = Web3.toChecksumAddress(payment_address)
         else:
@@ -69,65 +64,75 @@ class Payee(object):
         self.id_address = Web3.toChecksumAddress(id_address)
         self.payment_address = payment_address
         self.amount = amount
+        # TODO these are only set when using create_request_as_payer. Better place for them?
+        self.additional_amount = additional_amount if additional_amount else 0
+        self.payment_amount = payment_amount if payment_amount else 0
+        # TODO when is balance used?
+        self.balance = balance if balance else 0
+        self.paid_amount = paid_amount if paid_amount else 0
 
-
-# TODO need to rethink this class. What is the best canonical representation?
-class Request(object):
-    def __init__(self, currency_contract_address, ipfs_hash, data, payer,
-                 payee, sub_payees,
-                 _id=None, creator=None, state=None,
-                 expiration_date=None, signature=None, _hash=None,
-                 payments=None):
-        """ This object stores the Request in the format described in request.js, which
-            closely mirrors the data format of the smart contract.
-
-            In many cases we want a slightly different object, where instead of having e.g.
-            separate payee and sub_payee fields, we have a combined list of id_addresses.
-
-            As a convenience those fields are derived from the given values and stored
-            on the object, although that makes the interface slightly different to the
-            JS version.
-
-            TODO refactor plan - take a list of payees in constructor. use properties
-            so that request.payee returns payees[0], to support the "contract style"
-            interface.
-
-            :type payments: [request_network.types.Payment]
+    @property
+    def is_paid(self):
+        """ Return True if the payee has received payments with a total greater than
+            or equal to the expected amount. The paid amount can be greater than the
+            expected amount if the payer supplied additional payments.
         """
-        self.id = _id,
-        self.creator = creator
+        # TODO rather naive, needs to be tested with additionals/subtractions
+        return self.paid_amount >= self.amount
+
+
+class Payer(object):
+    """ Represents a Payer. BitcoinRefundAddresses not yet supported.
+
+        If `refund_address` is not given `id_address` is used as the refund address.
+    """
+    def __init__(self, id_address, refund_address=None):
+        self.id_address = Web3.toChecksumAddress(id_address)
+        self.refund_address = Web3.toChecksumAddress(refund_address) \
+            if refund_address else self.id_address
+
+
+class Request(object):
+    def __init__(self, currency_contract_address, payees, ipfs_hash, id=None, data=None,
+                 payer=None, state=None, payments=None, creator=None,
+                 expiration_date=None, signature=None, _hash=None):
+        """ Represents a Request which may be in one of multiple states:
+
+            - a Request that was retrieved from the blockchain
+            - a Signed Request that has been generated locally but does not exist on-chain
+        """
+        self.id = id
         self.currency_contract_address = currency_contract_address
-        self.ipfs_hash = ipfs_hash
-        self.data = data
         self.payer = payer
-        self.payee = payee
+        self.payees = payees
+        self.ipfs_hash = ipfs_hash
+        self.data = data if data else {}
         self.state = state
-        self.sub_payees = sub_payees
         self.expiration_date = expiration_date
         self.signature = signature
         self.hash = _hash
         self.payments = payments if payments else []
+        self.creator = creator
 
-        sub_payee_amounts = [str(s['amount']) for s in sub_payees]
-        sub_payee_id_addresses = [s['id_address'] for s in sub_payees]
-        sub_payee_payment_addresses = [s['payment_address']
-                                       if s['payment_address'] else EMPTY_BYTES_20
-                                       for s in sub_payees]
-        self.id_addresses = [self.payee['id_address'], *sub_payee_id_addresses]
-        self.payment_addresses = [self.payee['payment_address'], *sub_payee_payment_addresses]
-        self.amounts = [str(self.payee['amount']), *sub_payee_amounts]
+    @property
+    def amounts(self):
+        return [p.amount for p in self.payees]
 
-    @classmethod
-    def from_request_id(cls, request_id):
-        # get instance from a request ID
-        raise NotImplementedError()
+    @property
+    def payment_addresses(self):
+        return [p.payment_address for p in self.payees]
 
-    @classmethod
-    def from_transaction_hash(cls, transaction_hash):
-        # get instance from tx hash
-        raise NotImplementedError()
+    @property
+    def id_addresses(self):
+        return [p.id_address for p in self.payees]
 
-    def as_base64(self, callback_url, ethereum_network):
+    @property
+    def is_paid(self):
+        """ Returns True if all payees have received their expected amounts.
+        """
+        return all([p.is_paid for p in self.payees])
+
+    def as_base64(self, callback_url, ethereum_network_id):
         """ Return the base64-encoded JSON string required by the payment gateway.
 
         :param callback_url:
@@ -152,16 +157,16 @@ class Request(object):
                 'signature': self.signature
             },
             'callbackUrl': callback_url,
-            'networkId': ethereum_network.network_id
+            'networkId': ethereum_network_id
         }).encode('utf-8')).decode()
 
-    def write_qr_code(self, f, callback_url, ethereum_network, pyqrcode_kwargs=None):
+    def write_qr_code(self, f, callback_url, ethereum_network_id, pyqrcode_kwargs=None):
         """ Generate a QR code containing a URL to pay this Request via the payment gateway, and
             write it to file-like object `f`.
         """
         url = '{}{}'.format(
             PAYMENT_GATEWAY_BASE_URL,
-            self.as_base64(callback_url, ethereum_network)
+            self.as_base64(callback_url, ethereum_network_id)
         )
         kwargs = pyqrcode_kwargs if pyqrcode_kwargs else {}
         # Use 2 as the default scale. Request's URLs are quite long so they result in
@@ -172,26 +177,16 @@ class Request(object):
         qr_code.png(f, **kwargs)
         f.seek(0)
 
-    def get_qr_code_data_uri(self, callback_url, ethereum_network, pyqrcode_kwargs=None):
+    def get_qr_code_data_uri(self, callback_url, ethereum_network_id, pyqrcode_kwargs=None):
         """ Return a link to the payment gateway as a data URI, suitable for inclusion in an
             <img> tag.
 
         """
+        # TODO remove this and other QR code function, give example in docs.
+        # no point including png/pyqrcode for a function that is only a few lines
         with TemporaryFile() as f:
-            self.write_qr_code(f, callback_url, ethereum_network, pyqrcode_kwargs)
+            self.write_qr_code(f, callback_url, ethereum_network_id, pyqrcode_kwargs)
             encoded_uri = b64encode(f.read())
 
         mime = "text/png;"
         return "data:%sbase64,%s" % (mime, encoded_uri.decode())
-
-    def is_paid(self):
-        """ Naive implementation to see if a Request has been paid. Does not take into account
-            modifications (subtractions/additions). Assumes entire amount was paid at once.
-
-        :return: True if the Request has been fully paid.
-        """
-        paid_amounts = [p.delta_amount for p in self.payments]
-        if self.amounts == paid_amounts:
-            return True
-        else:
-            return False

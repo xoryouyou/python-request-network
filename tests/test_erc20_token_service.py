@@ -13,7 +13,7 @@ from web3.auto import (
     w3,
 )
 
-from request_network import (
+from request_network.api import (
     RequestNetwork,
 )
 from request_network.exceptions import (
@@ -22,11 +22,6 @@ from request_network.exceptions import (
 from request_network.services.ERC20 import (
     RequestERC20Service,
 )
-from request_network.types import (
-    EthereumNetworks,
-)
-
-# TODO proper test suite, these are dev smoke tests
 
 test_token_address = '0x345ca3e014aaf5dca488057592ee47305d9b3e10'
 test_account = '0x1b77F92aaEEE6249358907E1D33ae52F424D6292'
@@ -40,11 +35,11 @@ test_amounts = [
 class TestSignRequestAsPayee(unittest.TestCase):
     def setUp(self):
         super().setUp()
+        # TODO remove
         private_key_env_var = 'REQUEST_NETWORK_PRIVATE_KEY_0x821aEa9a577a9b44299B9c15c88cf3087F3b5544'
         os.environ[private_key_env_var] = 'c88b703fb08cbea894b6aeff5a544fb92e78a18e19814cd85da83b71f772aa6c'
-        self.request_api = RequestNetwork(ethereum_network=EthereumNetworks.private)
+        self.request_api = RequestNetwork()
         self.service = RequestERC20Service(
-            request_api=self.request_api,
             token_address=test_token_address
         )
 

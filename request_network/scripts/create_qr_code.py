@@ -5,7 +5,7 @@ import time
 
 from web3 import Web3
 
-from request_network import (
+from request_network.api import (
     RequestNetwork,
 )
 from request_network.currencies import (
