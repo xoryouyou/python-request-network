@@ -12,7 +12,6 @@ from request_network.currencies import (
     currencies_by_symbol,
 )
 from request_network.types import (
-    EthereumNetworks,
     Payee,
     Roles,
 )
@@ -29,21 +28,16 @@ def main():
                         help='Output filename')
     parser.add_argument('--callback-url', type=str, required=True,
                         help='Callback URL')
-    parser.add_argument('--network', type=str, required=True,
-                        help='Ethereum network, e.g. "main" or "rinkeby"')
+    parser.add_argument('--network-id', type=str, required=True,
+                        help='Ethereum network ID, e.g. 1 for "main" or 4 for "rinkeby"')
     parser.add_argument('--expiration', type=int,
                         default=3600,
-                        help='The number of seconds in the future at which this Request expires')
+                        help='The number of seconds after which this Request expires')
 
     args = parser.parse_args()
     if os.path.exists(args.output_file):
         raise Exception('{} already exists'.format(args.output_file))
     expiration_timestamp = int(time.time()) + (args.expiration if args.expiration else 3600)
-
-    if hasattr(EthereumNetworks, args.network):
-        ethereum_network = getattr(EthereumNetworks, args.network).value
-    else:
-        raise Exception('Unknown network: {}'.format(args.network))
 
     # Use format to get a string instead of a number in scientific notation
     amount_in_wei = format(args.amount * (10 ** 18), '.0f')
@@ -58,11 +52,10 @@ def main():
     print('Amount:  {} ETH ({} Wei)'.format(args.amount, amount_in_wei))
     print('Expiration: {}'.format(
         datetime.datetime.fromtimestamp(expiration_timestamp).strftime('%Y-%m-%d %H:%M:%S')))
-    print('Ethereum network name: {} (ID: {})'.format(
-        ethereum_network.name, ethereum_network.network_id))
+    print('Ethereum network name: ID: {}'.format(args.network_id))
     print('Callback URL: {}'.format(args.callback_url))
 
-    request_api = RequestNetwork(ethereum_network=ethereum_network)
+    request_api = RequestNetwork()
     signed_request = request_api.create_signed_request(
         role=Roles.PAYEE,
         currency=currencies_by_symbol['ETH'],
@@ -72,7 +65,7 @@ def main():
 
     with open(args.output_file, 'wb') as f:
         signed_request.write_qr_code(
-            f, callback_url=args.callback_url, ethereum_network=ethereum_network)
+            f, callback_url=args.callback_url, ethereum_network_id=args.network_id)
     print('QR code written to {}'.format(args.output_file))
 
 
