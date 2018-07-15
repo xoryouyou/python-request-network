@@ -9,11 +9,7 @@ from request_network.currencies import (
 )
 from request_network.types import (
     Roles,
-)
-from tests.test_request_network import (
-    expiration_date,
-    payees_for_broadcast,
-)
+    Payee)
 
 
 class Base64EncodingTestCase(unittest.TestCase):
@@ -28,8 +24,11 @@ class Base64EncodingTestCase(unittest.TestCase):
         signed_request = self.request_api.create_signed_request(
             role=Roles.PAYEE,
             currency=currencies_by_symbol['ETH'],
-            payees=payees_for_broadcast,
-            expiration_date=expiration_date,
+            payees=[Payee(
+                id_address='0x821aea9a577a9b44299b9c15c88cf3087f3b5544',
+                amount=int(0.1 * 10 ** 18)
+            )],
+            expiration_date=7952342400000,
             data={'reason': 'pay in advance'}
         )
 

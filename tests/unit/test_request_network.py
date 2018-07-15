@@ -118,19 +118,16 @@ payees_for_broadcast = [
         id_address="0x821aea9a577a9b44299b9c15c88cf3087f3b5544",
         payment_address="0x6330a553fc93768f612722bb8c2ec78ac90b3bbc",
         amount=1000,
-        # payment_amount=1000
     ),
     Payee(
         id_address="0x0d1d4e623d10f9fba5db95830f7d3839406c6af2",
         payment_address=None,
         amount=200,
-        # payment_amount=test_amounts[1]
     ),
     Payee(
         id_address="0x2932b7a2355d6fecc4b5c0b6bd44cc31df247a2e",
         payment_address="0x5aeda56215b167893e80b4fe645ba6d5bab767de",
         amount=300,
-        # payment_amount=test_amounts[2]
     )
 ]
 
@@ -140,7 +137,7 @@ class TestSignedRequests(unittest.TestCase):
         super().setUp()
         self.request_api = RequestNetwork()
 
-    def test_create_ethereum_signed_request_as_payee(self):
+    def test_create_and_broadcast_ethereum_signed_request_as_payee(self):
         signed_request = self.request_api.create_signed_request(
             role=Roles.PAYEE,
             currency=currencies_by_symbol['ETH'],
@@ -161,7 +158,8 @@ class TestSignedRequests(unittest.TestCase):
         # Broadcast the Request, retrieve it from the blockchain, and validate payment status
         tx_hash = self.request_api.broadcast_signed_request(
             signed_request=signed_request,
-            payment_amounts=[payee.amount for payee in payees_for_broadcast]
+            payment_amounts=[payee.amount for payee in payees_for_broadcast],
+            payer_address=Web3.toChecksumAddress('0x627306090abab3a6e1400e9345bc60c78a8bef57')
         )
 
         request = self.request_api.get_request_by_transaction_hash(tx_hash)
@@ -208,57 +206,17 @@ class TestSignedRequests(unittest.TestCase):
 
 
 class GetRequestTestCase(unittest.TestCase):
-    """ These tests are using transactions created by running the RequestNetwork.js
-        test suite.
+    """ Ensure that attempting to retrieve invalid Request IDs or transaction hashes
+        results in an exception.
     """
-
     def setUp(self):
         super().setUp()
         self.request_api = RequestNetwork()
-
-    def test_hash_request_object(self):
-        # TODO integration test, relies on request network js tests
-        request = self.request_api.get_request_by_transaction_hash(
-            '0x1f97459c45402fcb6562410cf4b4253a9d5d9528f247a892f9bddeefdd878b2d')
-        # Manually add the expiration date as it is not stored on the contract
-        request.expiration_date = expiration_date
-        hash_request_object(request)
-
-    def test_get_request_by_id(self):
-        # TODO integration test, relies on request network js tests
-
-        # TODO no not commit, find better method of adding middleware
-        w3.middleware_stack.inject(geth_poa_middleware, layer=0)
-
-        request = self.request_api.get_request_by_id(
-            # '0x8cdaf0cd259887258bc13a92c0a6da92698644c0000000000000000000000050')
-            '0x8fc2e7f2498f1d06461ee2d547002611b801202b0000000000000000000003e4')
-        self.assertEqual(
-            '0xC5fdf4076b8F3A5357c5E395ab970B5B54098Fef',
-            request.payer
-        )
-        self.assertEqual(
-            100000000,
-            request.payments[0].delta_amount
-        )
 
     def test_get_nonexistent_request_by_id(self):
         with self.assertRaises(RequestNotFound):
             self.request_api.get_request_by_id(
                 '0x8cdaf0cd259887258bc13a92c0a6da92698644c0000000000000000000000000')
-
-    def test_get_request_by_transaction_hash(self):
-        # TODO integration test, relies on request network js tests
-        request = self.request_api.get_request_by_transaction_hash(
-            '0x8d3ec9ef287f09577707bd8ffe7f053394d4cb5355f62495886dbd4a5589971b')
-        self.assertEqual(
-            '0x0F4F2Ac550A1b4e2280d04c21cEa7EBD822934b5',
-            request.payer
-        )
-        self.assertEqual(
-            {'reason': 'weed purchased'},
-            request.data
-        )
 
     def test_get_nonexistent_request_by_transaction_hash(self):
         with self.assertRaises(TransactionNotFound):
