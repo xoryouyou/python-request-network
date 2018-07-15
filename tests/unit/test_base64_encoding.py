@@ -8,8 +8,9 @@ from request_network.currencies import (
     currencies_by_symbol,
 )
 from request_network.types import (
+    Payee,
     Roles,
-    Payee)
+)
 
 
 class Base64EncodingTestCase(unittest.TestCase):

@@ -11,8 +11,7 @@ clean:
 	rm -rf dist/*
 
 dev:
-	pip install setuptools>=38.6.0
-	pip install wheel>=0.31.0
+	pip install setuptools
 	pip install wheel
 	pip install coverage
 	pip install codecov

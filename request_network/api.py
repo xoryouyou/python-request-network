@@ -12,13 +12,16 @@ from eth_abi.decoding import (
     StringDecoder,
     decode_uint_256,
 )
-from eth_utils import event_abi_to_log_topic, encode_hex
-from eth_utils.abi import _abi_to_signature
+from eth_utils import (
+    event_abi_to_log_topic,
+)
 from web3 import Web3
 from web3.auto import (
     w3,
 )
-from web3.utils.events import construct_event_topic_set, get_event_data
+from web3.utils.events import (
+    get_event_data,
+)
 
 from request_network.artifact_manager import (
     ArtifactManager,

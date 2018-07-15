@@ -3,7 +3,9 @@ import unittest
 from web3.auto import (
     w3,
 )
-from web3.middleware import geth_poa_middleware
+from web3.middleware import (
+    geth_poa_middleware,
+)
 
 from request_network.api import (
     RequestNetwork,

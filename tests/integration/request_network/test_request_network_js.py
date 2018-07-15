@@ -1,8 +1,15 @@
 import unittest
 
-from request_network.api import RequestNetwork
-from request_network.exceptions import RequestNotFound, TransactionNotFound
-from request_network.utils import hash_request_object
+from request_network.api import (
+    RequestNetwork,
+)
+from request_network.exceptions import (
+    RequestNotFound,
+    TransactionNotFound,
+)
+from request_network.utils import (
+    hash_request_object,
+)
 
 
 class GetRequestTestCase(unittest.TestCase):
