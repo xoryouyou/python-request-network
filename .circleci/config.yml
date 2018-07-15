@@ -13,13 +13,13 @@ jobs:
     steps:
       - checkout
       - run:
-          name: get artifacts file for hashing
+          name: Get artifacts.json for hashing
           command: |
             wget https://raw.githubusercontent.com/RequestNetwork/requestNetwork/master/packages/requestNetworkArtifacts/artifacts.json
       - restore_cache:
           key: v1-request-network-cache-{{ checksum "artifacts.json" }}
       - run:
-          name: clone RequestNetwork repo and install depedencies
+          name: Clone RequestNetwork repo and install depedencies
           command: |
             if [ ! -d "requestNetwork" ]; then
               git clone https://github.com/RequestNetwork/requestNetwork.git
@@ -33,7 +33,7 @@ jobs:
           paths:
             - "requestNetwork"
       - run:
-          name: deploy test contracts and run Request unit tests
+          name: Deploy test contracts and run Request unit tests
           command: |
             cd requestNetwork
             ./node_modules/lerna/bin/lerna.js run --scope @requestnetwork/request-network.js testdeploy
@@ -41,7 +41,7 @@ jobs:
       - restore_cache:
           key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
       - run:
-          name: install python dependencies
+          name: Install python dependencies
           command: |
             python3 -m venv .venv
             . .venv/bin/activate
@@ -51,7 +51,7 @@ jobs:
           paths:
             - ".venv"
       - run:
-          name: run tests
+          name: Run tests
           command: |
             . .venv/bin/activate
             make test
