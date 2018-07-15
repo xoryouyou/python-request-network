@@ -7,6 +7,7 @@ from web3 import Web3
 from web3.auto import (
     w3,
 )
+from web3.middleware import geth_poa_middleware
 
 from request_network.api import (
     RequestNetwork,
@@ -225,8 +226,13 @@ class GetRequestTestCase(unittest.TestCase):
 
     def test_get_request_by_id(self):
         # TODO integration test, relies on request network js tests
+
+        # TODO no not commit, find better method of adding middleware
+        w3.middleware_stack.inject(geth_poa_middleware, layer=0)
+
         request = self.request_api.get_request_by_id(
-            '0x8cdaf0cd259887258bc13a92c0a6da92698644c0000000000000000000000050')
+            # '0x8cdaf0cd259887258bc13a92c0a6da92698644c0000000000000000000000050')
+            '0x8fc2e7f2498f1d06461ee2d547002611b801202b0000000000000000000003e4')
         self.assertEqual(
             '0xC5fdf4076b8F3A5357c5E395ab970B5B54098Fef',
             request.payer

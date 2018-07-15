@@ -32,7 +32,15 @@ package:
 	python setup.py bdist_wheel
 
 test:
-	coverage run -m unittest discover
+	coverage run -m unittest discover --start-directory tests/unit
+	coverage html
+
+test_rinkeby:
+	coverage run -m unittest discover --start-directory tests/integration/rinkeby
+	coverage html
+
+test_request_network_js:
+	coverage run -m unittest discover --start-directory tests/integration/request_network_js
 	coverage html
 
 lint:
