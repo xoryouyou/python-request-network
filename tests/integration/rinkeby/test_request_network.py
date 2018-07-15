@@ -1,9 +1,5 @@
 import unittest
 
-from eth_account.messages import (
-    defunct_hash_message,
-)
-from web3 import Web3
 from web3.auto import (
     w3,
 )
@@ -12,21 +8,8 @@ from web3.middleware import geth_poa_middleware
 from request_network.api import (
     RequestNetwork,
 )
-from request_network.currencies import (
-    currencies_by_symbol,
-)
-from request_network.exceptions import (
-    RequestNotFound,
-    TransactionNotFound,
-)
 from request_network.types import (
     Payee,
-    Payer,
-    Roles,
-)
-from request_network.utils import (
-    get_request_bytes_representation,
-    hash_request_object,
 )
 
 # Insert POA middleware
@@ -84,7 +67,6 @@ class GetRequestTestCase(unittest.TestCase):
             100000000000000,
             request.payments[0].delta_amount
         )
-        print(request.transaction_hash)
 
     def test_get_request_by_transaction_hash(self):
         request = self.request_api.get_request_by_transaction_hash(

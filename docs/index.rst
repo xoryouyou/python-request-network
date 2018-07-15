@@ -15,6 +15,14 @@ Contents
 
     quickstart
     scripts
+    testing
+
+API
+---
+
+.. toctree::
+    :maxdepth: 2
+
     request_network_api
     artifact_manager
     services/core

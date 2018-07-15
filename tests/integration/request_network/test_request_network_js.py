@@ -1,6 +1,7 @@
 import unittest
 
 from request_network.api import RequestNetwork
+from request_network.exceptions import RequestNotFound, TransactionNotFound
 from request_network.utils import hash_request_object
 
 
@@ -43,6 +44,16 @@ class GetRequestTestCase(unittest.TestCase):
             request.payer
         )
         self.assertIn('reason', request.data)
+
+    def test_get_nonexistent_request_by_id(self):
+        with self.assertRaises(RequestNotFound):
+            self.request_api.get_request_by_id(
+                '0x8cdaf0cd259887258bc13a92c0a6da92698644c0000000000000000000000000')
+
+    def test_get_nonexistent_request_by_transaction_hash(self):
+        with self.assertRaises(TransactionNotFound):
+            self.request_api.get_request_by_transaction_hash(
+                '0x8d3ec9ef287f09577707bd8ffe7f053394d4cb5355f62495886dbd4a55800000')
 
 
 if __name__ == '__main__':

@@ -7,7 +7,6 @@ from web3 import Web3
 from web3.auto import (
     w3,
 )
-from web3.middleware import geth_poa_middleware
 
 from request_network.api import (
     RequestNetwork,
@@ -15,18 +14,12 @@ from request_network.api import (
 from request_network.currencies import (
     currencies_by_symbol,
 )
-from request_network.exceptions import (
-    RequestNotFound,
-    TransactionNotFound,
-)
 from request_network.types import (
     Payee,
-    Payer,
     Roles,
 )
 from request_network.utils import (
     get_request_bytes_representation,
-    hash_request_object,
 )
 
 test_token_address = '0x345ca3e014aaf5dca488057592ee47305d9b3e10'
@@ -59,58 +52,6 @@ payees = [
 ]
 
 expiration_date = 7952342400000
-
-
-class TestCreateRequestAsPayee(unittest.TestCase):
-    def setUp(self):
-        super().setUp()
-        self.request_api = RequestNetwork()
-
-    def test_create_request_as_payee(self):
-        tx_hash = self.request_api.create_request(
-            role=Roles.PAYEE,
-            currency=currencies_by_symbol['ETH'],
-            payees=payees,
-            payer=Payer(id_address=test_account, refund_address=None),
-            data={
-                'reason': 'selling cool stuff'
-            }
-        )
-        self.assertIsNotNone(tx_hash)
-        # Retrieve the request and validate it
-        request = self.request_api.get_request_by_transaction_hash(tx_hash)
-
-        self.assertEqual(
-            test_amounts,
-            [payee.amount for payee in request.payees]
-        )
-        self.assertEqual(
-            'selling cool stuff',
-            request.data['reason']
-        )
-
-    def test_create_request_as_payer(self):
-        tx_hash = self.request_api.create_request(
-            role=Roles.PAYER,
-            currency=currencies_by_symbol['ETH'],
-            payees=payees,
-            payer=Payer(id_address=test_account, refund_address=None),
-            data={
-                'reason': 'buying cool stuff'
-            }
-        )
-        self.assertIsNotNone(tx_hash)
-        # Retrieve the request and validate it
-        request = self.request_api.get_request_by_transaction_hash(tx_hash)
-
-        self.assertEqual(
-            test_amounts,
-            [payee.amount for payee in request.payees]
-        )
-        self.assertEqual(
-            'buying cool stuff',
-            request.data['reason']
-        )
 
 
 payees_for_broadcast = [
@@ -203,26 +144,3 @@ class TestSignedRequests(unittest.TestCase):
             payer=payees[0].id_address,
             ipfs_hash=None
         )
-
-
-class GetRequestTestCase(unittest.TestCase):
-    """ Ensure that attempting to retrieve invalid Request IDs or transaction hashes
-        results in an exception.
-    """
-    def setUp(self):
-        super().setUp()
-        self.request_api = RequestNetwork()
-
-    def test_get_nonexistent_request_by_id(self):
-        with self.assertRaises(RequestNotFound):
-            self.request_api.get_request_by_id(
-                '0x8cdaf0cd259887258bc13a92c0a6da92698644c0000000000000000000000000')
-
-    def test_get_nonexistent_request_by_transaction_hash(self):
-        with self.assertRaises(TransactionNotFound):
-            self.request_api.get_request_by_transaction_hash(
-                '0x8d3ec9ef287f09577707bd8ffe7f053394d4cb5355f62495886dbd4a55800000')
-
-
-if __name__ == '__main__':
-    unittest.main()
