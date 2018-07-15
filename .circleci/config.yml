@@ -12,6 +12,31 @@ jobs:
       NODE_ENV: test
     steps:
       - checkout
+      - restore_cache:
+          key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
+      - run:
+          name: Install python dependencies
+          command: |
+            python3 -m venv .venv
+            . .venv/bin/activate
+            make dev
+      - save_cache:
+          key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
+          paths:
+            - ".venv"
+      - run:
+          name: Run unit tests
+          command: |
+            . .venv/bin/activate
+            make test
+      - run:
+          name: Run Rinkeby integration tests
+          environment:
+            REQUEST_NETWORK_ETHEREUM_NETWORK_NAME: "rinkeby"
+          command: |
+            . .venv/bin/activate
+            env
+            make test_rinkeby
       - run:
           name: Get artifacts.json for hashing
           command: |
@@ -38,33 +63,17 @@ jobs:
             cd requestNetwork
             ./node_modules/lerna/bin/lerna.js run --scope @requestnetwork/request-network.js testdeploy
             ./node_modules/lerna/bin/lerna.js run --scope @requestnetwork/request-network.js test --stream
-      - restore_cache:
-          key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
       - run:
-          name: Install python dependencies
-          command: |
-            python3 -m venv .venv
-            . .venv/bin/activate
-            make dev
-      - save_cache:
-          key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
-          paths:
-            - ".venv"
-      - run:
-          name: Run tests
+          name: Run RequestNetwork.js integration tests
           command: |
             . .venv/bin/activate
-            make test
-#            codecov
-#      - store_artifacts:
-#          path: htmlcov/
+            make test_request_network_js
 
   deploy:
     docker:
       - image: circleci/python:3.6
     steps:
       - checkout
-
       - restore_cache:
           key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
       - run:
