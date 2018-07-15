@@ -1,7 +1,6 @@
 from datetime import (
     datetime,
 )
-import os
 import time
 import unittest
 
@@ -35,9 +34,6 @@ test_amounts = [
 class TestSignRequestAsPayee(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        # TODO remove
-        private_key_env_var = 'REQUEST_NETWORK_PRIVATE_KEY_0x821aEa9a577a9b44299B9c15c88cf3087F3b5544'
-        os.environ[private_key_env_var] = 'c88b703fb08cbea894b6aeff5a544fb92e78a18e19814cd85da83b71f772aa6c'
         self.request_api = RequestNetwork()
         self.service = RequestERC20Service(
             token_address=test_token_address
@@ -79,7 +75,8 @@ class TestSignRequestAsPayee(unittest.TestCase):
 
         self.assertEqual(
             # Signature taken from requestnetwork.js tests for signing request
-            '0x954fcc32f2fa56beff4933d11fdda7c5f5f94fa708eef8af803e2d196e6d24a75cca40c1bceeef2c3786157bb0fc76ca0b6b00c957e5a1dde5247e59b0750c761c',
+            '0x954fcc32f2fa56beff4933d11fdda7c5f5f94fa708eef8af803e2d196e6d'
+            '24a75cca40c1bceeef2c3786157bb0fc76ca0b6b00c957e5a1dde5247e59b0750c761c',
             signed_request.signature)
 
     def test_sign_request_invalid_expiration(self):

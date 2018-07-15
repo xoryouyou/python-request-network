@@ -1,9 +1,5 @@
 import unittest
 
-from eth_abi.decoding import (
-    StringDecoder,
-    decode_uint_256,
-)
 from eth_account.messages import (
     defunct_hash_message,
 )
@@ -62,7 +58,6 @@ payees = [
 ]
 
 expiration_date = 7952342400000
-
 
 
 class TestCreateRequestAsPayee(unittest.TestCase):
@@ -139,15 +134,10 @@ payees_for_broadcast = [
 ]
 
 
-
 class TestSignedRequests(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        # TODO remove
-        # private_key_env_var = 'REQUEST_NETWORK_PRIVATE_KEY_0x821aEa9a577a9b44299B9c15c88cf3087F3b5544'
-        # os.environ[private_key_env_var] = 'c88b703fb08cbea894b6aeff5a544fb92e78a18e19814cd85da83b71f772aa6c'
         self.request_api = RequestNetwork()
-
 
     def test_create_ethereum_signed_request_as_payee(self):
         signed_request = self.request_api.create_signed_request(
@@ -203,10 +193,12 @@ class TestSignedRequests(unittest.TestCase):
         )
 
         self.assertEqual(
-            '0x954fcc32f2fa56beff4933d11fdda7c5f5f94fa708eef8af803e2d196e6d24a75cca40c1bceeef2c3786157bb0fc76ca0b6b00c957e5a1dde5247e59b0750c761c',
+            '0x954fcc32f2fa56beff4933d11fdda7c5f5f94fa708eef8af803e2d19'
+            '6e6d24a75cca40c1bceeef2c3786157bb0fc76ca0b6b00c957e5a1dde5247e59b0750c761c',
             signed_request.signature)
 
-        data = get_request_bytes_representation(
+        # TODO get_request_bytes_representation should have its own unit tests
+        get_request_bytes_representation(
             payee_id_addresses=[payee.id_address for payee in payees],
             amounts=test_amounts,
             payer=payees[0].id_address,
