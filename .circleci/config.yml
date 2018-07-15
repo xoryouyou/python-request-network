@@ -2,32 +2,60 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/python:3.6
+      - image: circleci/python:3.6-node
+      - image: ipfs/go-ipfs:v0.4.16
+      - image: trufflesuite/ganache-cli:v6.1.6
+        command: [
+          "-l", "90000000",
+          "-m", "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat"]
+    environment:
+      NODE_ENV: test
     steps:
       - checkout
-
+      - run:
+          name: get artifacts file for hashing
+          command: |
+            wget https://raw.githubusercontent.com/RequestNetwork/requestNetwork/master/packages/requestNetworkArtifacts/artifacts.json
+      - restore_cache:
+          key: v1-request-network-cache-{{ checksum "artifacts.json" }}
+      - run:
+          name: clone RequestNetwork repo and install depedencies
+          command: |
+            git clone https://github.com/RequestNetwork/requestNetwork.git
+            cd requestNetwork
+            npm install .
+            cd packages/requestNetwork.js/ && npm install . && cd -
+            ./node_modules/lerna/bin/lerna.js init
+      - save_cache:
+          key: v1-request-network-cache-{{ checksum "artifacts.json" }}
+          paths:
+            - "requestNetwork"
+      - run:
+          name: deploy test contracts and run Request unit tests
+          command: |
+            cd requestNetwork
+            ./node_modules/lerna/bin/lerna.js run --scope @requestnetwork/request-network.js testdeploy
+            ./node_modules/lerna/bin/lerna.js run --scope @requestnetwork/request-network.js test --stream
       - restore_cache:
           key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
-
       - run:
           name: install python dependencies
           command: |
-            python3 -m venv venv
-            . venv/bin/activate
+            python3 -m venv .venv
+            . .venv/bin/activate
             make dev
       - save_cache:
           key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
           paths:
-            - "venv"
-
+            - ".venv"
       - run:
           name: run tests
           command: |
-            . venv/bin/activate
+            . .venv/bin/activate
             make test
 #            codecov
-      - store_artifacts:
-          path: htmlcov/
+#      - store_artifacts:
+#          path: htmlcov/
 
   deploy:
     docker:
@@ -37,28 +65,27 @@ jobs:
 
       - restore_cache:
           key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
-
       - run:
           name: install python dependencies
           command: |
-            python3 -m venv venv
-            . venv/bin/activate
+            python3 -m venv .venv
+            . .venv/bin/activate
             make dev
             pip install -r requirements-dev.txt
       - save_cache:
           key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
           paths:
-            - "venv"
+            - ".venv"
       - run:
           name: verify git tag and create packages
           command: |
-            . venv/bin/activate
+            . .venv/bin/activate
             python setup.py verify_git_tag
             make prepare_release
       - run:
           name: upload to pypi
           command: |
-            . venv/bin/activate
+            . .venv/bin/activate
             twine upload dist/*
 workflows:
   version: 2
