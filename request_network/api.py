@@ -12,10 +12,13 @@ from eth_abi.decoding import (
     StringDecoder,
     decode_uint_256,
 )
+from eth_utils import event_abi_to_log_topic, encode_hex
+from eth_utils.abi import _abi_to_signature
 from web3 import Web3
 from web3.auto import (
     w3,
 )
+from web3.utils.events import construct_event_topic_set, get_event_data
 
 from request_network.artifact_manager import (
     ArtifactManager,
@@ -43,20 +46,30 @@ from request_network.utils import (
 class RequestNetwork(object):
     """ The main interaction point with the Request Network API.
     """
-    def create_request(self, role, currency, payees, payer, data=None, options=None):
+
+    def create_request(self, role, currency, payees, payer, data=None):
         """ Create a Request.
 
-        :param role:
-        :param currency:
-        :param payees:
-        :param payer:
-        :param data:
-        :param options:
-        :return: Hash of the transaction in which the Request was broadcast
+        Note that this method broadcasts the transaction which will create the
+        Request, but does not confirm that the transaction is included in the
+        block. It is the responsiblity of the caller to ensure this transaction
+        attains a specific number of confirmations.
+
+        :param role: Role of the caller, i.e. Payer or Payee
+        :type role: types.Roles.PAYEE
+        :param currency: The currency in which payment will be made
+        :type currency: currency.Currency
+        :param payees: List of Payees
+        :type payees: [types.Payee]
+        :param payer: A Payer representing the address which will pay the Request
+        :type payer: types.Payer
+        :param data: Optional dictionary of data which will be stored on IPFS
+        :type data: dict
+        :param options: Dictionary of options (not yet supported)
+        :type options: dict
+        :return: The transaction hash of the transaction which, if successfully
+            included in a block, will create this Request.
         """
-        if not options:
-            # TODO default options config
-            options = {}
 
         service_args = {
             'payer_id_address': payer.id_address,
@@ -64,8 +77,7 @@ class RequestNetwork(object):
             'id_addresses': [payee.id_address for payee in payees],
             'payment_addresses': [payee.payment_address for payee in payees],
             'amounts': [payee.amount for payee in payees],
-            'data': data,
-            'options': options
+            'data': data
         }
         service = get_service_for_currency(currency)
         if role == Roles.PAYEE:
@@ -80,26 +92,25 @@ class RequestNetwork(object):
         return method(**service_args)
 
     def create_signed_request(self, role, currency, payees,
-                              expiration_date, data=None, request_options=None):
+                              expiration_date, data=None):
         """ Create a signed Request instance
 
         :param role: Role of the signer - payer or payee (currently only payee is supported)
         :type role: types.Roles.PAYEE
         :param currency: The currency in which payment will be made
         :type currency: currency.Currency
-        :param payees: Array of Payee objects
+        :param payees: List of Payee objects
         :type payees: [types.Payee]
         :param expiration_date: Unix timestamp after which Request can no longer be broadcast
-        :param request_options: Dictionary of options (not supported)
+        :param data: Optional dictionary of data which will be stored on IPFS
+        :type data: dict
+        :param options: Dictionary of options (not yet supported)
+        :type options: dict
         :return: A Request instance
         :rtype: request_network.types.Request
         """
         if role != Roles.PAYEE:
             raise NotImplementedError('Signing Requests as the payer is not yet supported')
-
-        if request_options:
-            # TODO implement request options
-            raise NotImplementedError()
 
         service_args = {
             'id_addresses': [payee.id_address for payee in payees],
@@ -111,25 +122,28 @@ class RequestNetwork(object):
         service = get_service_for_currency(currency)
         return service.sign_request_as_payee(**service_args)
 
-    def broadcast_signed_request(self, signed_request, payment_amounts=None,
-                                 additional_payments=None, options=None):
+    def broadcast_signed_request(self, signed_request, payer_address, payment_amounts=None,
+                                 additional_payments=None):
         """ Broadcast a signed Request.
 
             Currently the Request API only supports signing requests as the payee,
             therefore this function only supports broadcasting a signed request
             as the payer.
 
-        :param signed_request:
-        :param payment_amounts:
-        :param additional_payments:
-        :param options:
-        :return:
+        :param signed_request: The previously-signed Request to broadcast
+        :type signed_request: types.Request
+        :param payment_amounts: A list of integers specifying how much should be
+            paid to each payee when the Request is created.
+            The amount is in the currency of the Request.
+        :type payment_amounts: [int]
+        :param additional_payments: Additional amounts to pay on top of the `payment_amounts`.
+        :type additional_payments: [int]
+        :param options: Dictionary of options (not yet supported)
+        :type options: dict
+        :return: The transaction hash of the transaction which, if successfully
+            included in a block, will create (and possibly pay, depending on `payment_amounts`)
+            this Request.
         """
-
-        if options:
-            # TODO implement request options
-            raise NotImplementedError()
-
         am = ArtifactManager()
         service_class = am.get_service_class_by_address(signed_request.currency_contract_address)
         # currency = signed_request.currency_cont
@@ -137,14 +151,15 @@ class RequestNetwork(object):
             'signed_request': signed_request,
             'creation_payments': payment_amounts,  # TODO decide naming convention, stick to it
             'additional_payments': additional_payments,
+            'payer_address': payer_address
         }
         service = service_class()
         return service.broadcast_signed_request_as_payer(**service_args)
 
     def get_request_by_id(self, request_id, block_number=None):
-        """ Get a Request from its request_id.
+        """ Get a Request from its ID.
 
-        :param request_id: 32 byte hex string
+        :param request_id: The Request ID as a 32 byte hex string
         :param block_number: If provided, only search for Created events from this block onwards.
         :return: A Request instance
         :rtype: request_network.types.Request
@@ -198,65 +213,78 @@ class RequestNetwork(object):
 
         # To find the creator and data for a Request we need to find the Created event
         # that was emitted when the Request was created
+        # web3.py provides helpers for getting logs for a specific contract event but
+        # they rely on `eth_newFilter` which is not supported on Infura. As a workaround
+        # the logs are retrieved with `web3.eth`getLogs` which does not require a new
+        # filter to be created.
+        created_event_signature = Web3.toHex(event_abi_to_log_topic(
+            event_abi=core_contract.events.Created().abi
+        ))
+        logs = w3.eth.getLogs({
+            'fromBlock': block_number if block_number else core_contract_data['block_number'],
+            'address': core_contract_address,
+            'topics': [created_event_signature, request_id]
+        })
+        assert len(logs) == 1, "Incorrect number of logs returned"
+
         # Work around Solidity bug. See note in read_padded_data_from_stream.
         with mock.patch.object(
                 StringDecoder,
                 'read_data_from_stream',
                 new=read_padded_data_from_stream):
-            created_logs = core_contract.events.Created().createFilter(
-                fromBlock=block_number if block_number else core_contract_data['block_number'],
-                argument_filters={
-                    'requestId': Web3.toBytes(hexstr=request_id)
-                }
-            ).get_all_entries()
+            created_event_data = get_event_data(
+                event_abi=core_contract.events.Created().abi,
+                log_entry=logs[0]
+            )
 
-        if len(created_logs) == 0:
-            raise Exception('Could not get Created event for Request {}'.format(request_id))
-        if len(created_logs) > 1:
-            raise Exception('Multiple logs returned for Request {}'.format(request_id))
-
-        creator = created_logs[0].args.creator
+        # creator = log_data.args.creator
         # See if we have an IPFS hash, and get the file if so
-        if created_logs[0].args.data != '':
-            ipfs_hash = created_logs[0].args.data
+        if created_event_data.args.data != '':
+            ipfs_hash = created_event_data.args.data
             data = retrieve_ipfs_data(ipfs_hash)
         else:
             ipfs_hash = None
             data = {}
 
         # Iterate through UpdateBalance events to build a list of payments made for this request
-        balance_update_logs = core_contract.events.UpdateBalance().createFilter(
-            fromBlock=block_number if block_number else core_contract_data['block_number'],
-            argument_filters={
-                'requestId': Web3.toBytes(hexstr=request_id)
-            }
-        ).get_all_entries()
+        updated_event_signature = Web3.toHex(event_abi_to_log_topic(
+            event_abi=core_contract.events.UpdateBalance().abi
+        ))
+        logs = w3.eth.getLogs({
+            'fromBlock': block_number if block_number else core_contract_data['block_number'],
+            'address': core_contract_address,
+            'topics': [updated_event_signature, request_id]
+        })
 
         payments = []
-        for log in balance_update_logs:
+        for log in logs:
+            event_data = get_event_data(
+                event_abi=core_contract.events.UpdateBalance().abi,
+                log_entry=log
+            )
             payments.append(Payment(
-                payee_index=log.args.payeeIndex,
-                delta_amount=log.args.deltaAmount
+                payee_index=event_data.args.payeeIndex,
+                delta_amount=event_data.args.deltaAmount
             ))
-            # Testing - store paid_amount on payee
-            payees[log.args.payeeIndex].paid_amount += log.args.deltaAmount
+            payees[event_data.args.payeeIndex].paid_amount += event_data.args.deltaAmount
 
         # TODO set request state
         return Request(
             id=request_id,
-            creator=creator,
+            creator=created_event_data.args.creator,
             currency_contract_address=request_data.currency_contract_address,
             payer=request_data.payer_address,
             payees=payees,
             payments=payments,
             ipfs_hash=ipfs_hash,
-            data=data
+            data=data,
+            transaction_hash=Web3.toHex(created_event_data.transactionHash)
         )
 
     def get_request_by_transaction_hash(self, transaction_hash):
         """ Get a Request from an Ethereum transaction hash.
 
-        :param transaction_hash:
+        :param transaction_hash: The hash of the transaction which created the Request
         :return: A Request instance
         :rtype: request_network.types.Request
         """
@@ -319,14 +347,12 @@ def read_padded_data_from_stream(self, stream):
     padded_length = ceil32(data_length)
 
     data = stream.read(padded_length)
-    # Start hack
+
+    # Start change
     # Manually pad data to force it to desired length
     if len(data) < padded_length:
         data += b'\x00' * (padded_length - data_length)
-    # Example:
-    # if data == b'QmbFpULNpMJEj9LfvhH4hSTfTse5YrS2JvhbHW6bDCNpwS':
-    #     data = b'QmbFpULNpMJEj9LfvhH4hSTfTse5YrS2JvhbHW6bDCNpwS\x00\x00\x00...'
-    # End hack
+    # End change
 
     if len(data) < padded_length:
         from eth_abi.exceptions import InsufficientDataBytes
