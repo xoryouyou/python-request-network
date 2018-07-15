@@ -37,20 +37,32 @@ The IPFS RPC node's hostname and port are stored in the :code:`IPFS_NODE_HOST` a
 
     export IPFS_NODE_HOST="https://ipfs.infura.io"
 
+The IPFS node is only used when storing or retrieving a Request's optional JSON data.
+
+Request Network
+~~~~~~~~~~~~~~~
+
+The :code:`REQUEST_NETWORK_ETHEREUM_NETWORK_NAME` variable specifies the friendly name of the Ethereum network
+to use, e.g. "main", "rinkeby", or "private". This is used when looking up Request Network
+artifacts (i.e. deployed smart contracts).
+
+:code:`REQUEST_NETWORK_ARTIFACT_DIRECTORY` specifies the directory from which smart contract artifacts
+are loaded. Most users will not need to change this - the default is to load the artifacts which are
+distributed with this library.
 
 Signing Messages with Local Private Keys
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Private keys are stored in environment variables, where the address is part of the environment variable name.
 
-For example the private key for address :code:`0x123`: would be stored in the
+For example the private key for address :code:`0x123` would be stored in the
 :code:`REQUEST_NETWORK_PRIVATE_KEY_0x123` environment variable.
 
 Note that the address used in the environment variable must be checksummed (i.e. not all in lower-case).
-:code:`Web3.toChecksumAddress` can be used to correctly format an address.
+:code:`Web3.toChecksumAddress()` can be used to correctly format an address.
 
-In future the signing mechanism will be extended to make it more configurable, to support use cases such
-as signing messages with a separate signing microservice.
+In future the signing mechanism will be extended to make it configurable, providing support for
+use cases such as signing messages with a separate signing microservice.
 
 Creating a Signed Request
 -------------------------
@@ -76,6 +88,7 @@ does not contain any extra data we do not need to configure IPFS.
 
 .. code-block:: bash
 
+    export REQUEST_NETWORK_ETHEREUM_NETWORK_NAME=rinkeby
     export WEB3_PROVIDER_URI=https://rinkeby.infura.io/your-api-key
     # This key is already publicly exposed in various documentation online.
     export REQUEST_NETWORK_PRIVATE_KEY_0x821aEa9a577a9b44299B9c15c88cf3087F3b5544=c88b703fb08cbea894b6aeff5a544fb92e78a18e19814cd85da83b71f772aa6c
@@ -83,25 +96,26 @@ does not contain any extra data we do not need to configure IPFS.
 
 .. code-block:: python
 
-    import os
     from time import time
     from web3.auto import w3
     from web3.middleware import geth_poa_middleware
 
-    from request_network import RequestNetwork, types
+    from request_network.api import RequestNetwork
+    from request_network import types
     from request_network.currencies import currencies_by_symbol
-    from request_network.types import EthereumNetworks
 
     # Inject the POA middleware so we can work with Rinkeby
+    from request_network.utils import hash_request_object
+
     w3.middleware_stack.inject(geth_poa_middleware, layer=0)
 
-    request_api = RequestNetwork(ethereum_network=types.EthereumNetworks.rinkeby)
+    request_api = RequestNetwork()
 
     # Generate a Request which will send 0.0001 ETH to the recipient
     payee = types.Payee(
         id_address='0x821aea9a577a9b44299b9c15c88cf3087f3b5544',
         payment_address=None,
-        amount="100000000000000"  # 0.0001 ETH in Wei
+        amount=int(0.0001 * 10 ** 18)  # 0.0001 ETH in Wei
     )
 
     # Generate the signed Request data
@@ -115,7 +129,7 @@ does not contain any extra data we do not need to configure IPFS.
     # Redirect the user to the following URL -
     payment_url = 'https://app.request.network/#/pay-with-request/' + signed_request.as_base64(
         callback_url='https://example.com/request-callback/',
-        ethereum_network=EthereumNetworks.rinkeby
+        ethereum_network_id=4  # Rinkeby
     )
 
     # Later, after the user has paid the Request
@@ -123,28 +137,27 @@ does not contain any extra data we do not need to configure IPFS.
     request = request_api.get_request_by_transaction_hash(transaction_hash)
 
     # Make sure the Request we retrieved from the blockchain matches the one we created earlier
-    retrieved_hash = request_api.hash_request_object(
+    retrieved_hash = hash_request_object(
         request,
         ignore_payer=True,
         expiration_date=signed_request.expiration_date)
-    stored_hash = request_api.hash_request_object(signed_request)
+    stored_hash = hash_request_object(signed_request)
     assert retrieved_hash == stored_hash
 
     # Check if the Request has been fully paid. This is a naive implementation - see code for details
-    if request.is_paid():
+    if request.is_paid:
         print('The Request has been paid')
 
 
 Note that calling :code:`RequestNetwork.create_signed_request()` with a :code:`data` parameter will write
-the data to IPFS. It should only be called if you have reasonable certainty that the Request
-will be paid.
+the data to IPFS.
 
-This also means that calling the function is too slow to do within the request/response cycle, so
-it should be done in an asynchronous task.
+For web developers: this also means that calling the function is too slow to do within the
+request/response cycle, so it should be done in an asynchronous task.
 
 Depending on the use case it might be feasible to pre-generate signed Requests. For example if each
-order consists of a single product, and users can be identified by their Ethereum addresses,
-a signed Request can be generated for each product in advance as the same data can be used for
+order consists of a single product and users can be identified by their Ethereum addresses,
+a signed Request can be generated for each product in advance, as the same data can be used for
 multiple Requests.
 
 If the Request needs to contain order-specific information (such as a unique
@@ -163,7 +176,7 @@ Once a Request has been signed the URL for paying it can be retrieved with:
 
     payment_url = request.get_payment_gateway_url(
         callback_url='https://example.com/request-callback/',
-        ethereum_network=types.EthereumNetworks.rinkeby
+        ethereum_network_id=4
     )
 
 It is also possible to retrieve a QR code containing a link to the payment gateway.
@@ -181,7 +194,7 @@ The QR code can be written to a file-like object:
         signed_request.write_qr_code(
             f,
             callback_url='https://example.com/request-callback/',
-            ethereum_network=EthereumNetworks.rinkeby}
+            ethereum_network_id=4
         )
 
 ... or retrieved as data URI image, ready for use in an HTML `<img>` tag as shown above:
@@ -190,7 +203,7 @@ The QR code can be written to a file-like object:
 
     data_uri = signed_request.get_qr_code_data_uri(
         callback_url='https://example.com/request-callback/',
-        ethereum_network=EthereumNetworks.rinkeby
+        ethereum_network_id=4
     )
     print('<img src="{}">'.format(data_uri))
 

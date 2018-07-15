@@ -10,11 +10,11 @@ from request_network.utils import (
 
 class RequestEthereumService(RequestCoreService):
 
-    def get_currency_contract_artifact_name(self):
+    def _get_currency_contract_artifact_name(self):
         return 'last-RequestEthereum'
 
-    def broadcast_signed_request_as_payer(self, signed_request, creation_payments=None,
-                                          additional_payments=None, options=None):
+    def broadcast_signed_request_as_payer(self, signed_request, payer_address,
+                                          creation_payments=None, additional_payments=None):
         """
 
         :param signed_request:
@@ -32,17 +32,16 @@ class RequestEthereumService(RequestCoreService):
         creation_payments = creation_payments if creation_payments else empty_payments
         additional_payments = additional_payments if additional_payments else empty_payments
 
-        currency_contract_data = self.get_currency_contract_data()
+        currency_contract_data = self._get_currency_contract_data()
         currency_contract = currency_contract_data['instance']
         estimated_value = currency_contract.functions.collectEstimation(
             _expectedAmount=sum(a for a in signed_request.amounts)
         ).call()
 
         transaction_options = {
-            'from': Web3.toChecksumAddress('0x627306090abab3a6e1400e9345bc60c78a8bef57'),
             # TODO should the value also include additionals?
+            'from': payer_address,
             'value': estimated_value + sum(creation_payments),
-            # 'gas': 90000000
         }
         request_bytes = get_request_bytes_representation(
             payee_id_addresses=signed_request.id_addresses,
@@ -51,7 +50,6 @@ class RequestEthereumService(RequestCoreService):
             ipfs_hash=signed_request.ipfs_hash
         )
 
-        # TODO almost working, up to here... tx is failing with revert, not yet sure why.
         tx_hash = currency_contract.functions.broadcastSignedRequestAsPayer(
             _requestData=Web3.toBytes(hexstr=request_bytes),
             _payeesPaymentAddress=signed_request.payment_addresses,

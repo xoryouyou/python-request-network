@@ -2,5 +2,5 @@
 Request Network API
 ===================
 
-.. automodule:: request_network
+.. autoclass:: request_network.api.RequestNetwork
     :members:

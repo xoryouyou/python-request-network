@@ -43,7 +43,7 @@ class Payment(object):
 
 
 class Payee(object):
-    def __init__(self, id_address, payment_address, amount,
+    def __init__(self, id_address, amount, payment_address=None,
                  additional_amount=None, payment_amount=None, balance=None,
                  paid_amount=None):
         """
@@ -59,8 +59,7 @@ class Payee(object):
         if payment_address:
             payment_address = Web3.toChecksumAddress(payment_address)
         else:
-            # TODO should be using None here?
-            payment_address = EMPTY_BYTES_20
+            payment_address = None
         self.id_address = Web3.toChecksumAddress(id_address)
         self.payment_address = payment_address
         self.amount = amount
@@ -95,7 +94,8 @@ class Payer(object):
 class Request(object):
     def __init__(self, currency_contract_address, payees, ipfs_hash, id=None, data=None,
                  payer=None, state=None, payments=None, creator=None,
-                 expiration_date=None, signature=None, _hash=None):
+                 expiration_date=None, signature=None, _hash=None,
+                 transaction_hash=None):
         """ Represents a Request which may be in one of multiple states:
 
             - a Request that was retrieved from the blockchain
@@ -113,6 +113,7 @@ class Request(object):
         self.hash = _hash
         self.payments = payments if payments else []
         self.creator = creator
+        self.transaction_hash = transaction_hash
 
     @property
     def amounts(self):
@@ -160,14 +161,19 @@ class Request(object):
             'networkId': ethereum_network_id
         }).encode('utf-8')).decode()
 
+    def get_payment_gateway_url(self, callback_url, ethereum_network_id):
+        return '{}{}'.format(
+            PAYMENT_GATEWAY_BASE_URL,
+            self.as_base64(callback_url, ethereum_network_id)
+        )
+
     def write_qr_code(self, f, callback_url, ethereum_network_id, pyqrcode_kwargs=None):
         """ Generate a QR code containing a URL to pay this Request via the payment gateway, and
             write it to file-like object `f`.
         """
-        url = '{}{}'.format(
-            PAYMENT_GATEWAY_BASE_URL,
-            self.as_base64(callback_url, ethereum_network_id)
-        )
+        url = self.get_payment_gateway_url(
+            callback_url=callback_url,
+            ethereum_network_id=ethereum_network_id)
         kwargs = pyqrcode_kwargs if pyqrcode_kwargs else {}
         # Use 2 as the default scale. Request's URLs are quite long so they result in
         # pixel-dense QR codes.

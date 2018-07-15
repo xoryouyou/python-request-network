@@ -15,7 +15,7 @@ class RequestERC20Service(RequestCoreService):
         super().__init__()
         self.token_address = token_address
 
-    def get_currency_contract_artifact_name(self):
+    def _get_currency_contract_artifact_name(self):
         return 'last-requesterc20-{}'.format(self.token_address)
 
     def sign_request_as_payee(self, id_addresses, amounts,

@@ -18,12 +18,13 @@ Generate a Request and save the QR code to a file.
         --amount 0.01  \
         --output-file test.png \
         --callback-url http://example.com \
-        --network main
+        --network-id 4
 
     Generating signed Request and QR code
     Payee: 0x821aEa9a577a9b44299B9c15c88cf3087F3b5544
     Amount:  0.01 ETH (10000000000000000 Wei)
-    Expiration: 2018-07-06 19:38:01
-    Ethereum network name: main (ID: 1)
+    Expiration: 2018-07-15 16:31:22
+    Ethereum network name: ID: 4
     Callback URL: http://example.com
     QR code written to test.png
+

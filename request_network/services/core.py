@@ -28,27 +28,37 @@ from request_network.utils import (
 
 
 class RequestCoreService(object):
-    """ Class for Request Core """
+    """ Class for Request Core
 
-    def get_currency_contract_data(self):
+        This class should not be used directly - instead, use a child class such as
+        `RequestEthereumService` or `RequestERC20Service`.
+    """
+
+    def _get_currency_contract_data(self):
         """ Return the currency contract for the given currency. `artifact_name` could
             be `last-RequestEthereum`, or `last-requesterc20-{token_address}`.
         """
-        artifact_name = self.get_currency_contract_artifact_name()
+        artifact_name = self._get_currency_contract_artifact_name()
         artifact_manager = ArtifactManager()
         contract_data = artifact_manager.get_contract_data(artifact_name)
         return contract_data
 
-    def get_currency_contract_artifact_name(self):
+    def _get_currency_contract_artifact_name(self):
         """ Return the artifact name used when looking up the currency contract.
         """
         raise NotImplementedError()
 
+    def broadcast_signed_request_as_payer(self, signed_request, payer_address,
+                                          creation_payments=None, additional_payments=None):
+        raise NotImplementedError()
+
     def create_request_as_payee(self, id_addresses, amounts,
                                 payment_addresses, payer_refund_address, payer_id_address,
-                                data, options):
+                                data):
         # validate request args
-
+        payment_addresses = [
+            Web3.toChecksumAddress(a) if a else EMPTY_BYTES_20 for a in payment_addresses
+        ]
         # call collectEstimation on the currency contract
 
         ipfs_hash = store_ipfs_data(data) if data else ''
@@ -78,14 +88,13 @@ class RequestCoreService(object):
                 )
 
         # call fee estimator, set as value for tx
-        currency_contract_data = self.get_currency_contract_data()
+        currency_contract_data = self._get_currency_contract_data()
         currency_contract = currency_contract_data['instance']
         estimated_value = currency_contract.functions.collectEstimation(
             _expectedAmount=sum(a for a in amounts)
         ).call()
 
         transaction_options = {
-            # TODO allow configuration of from address
             'from': id_addresses[0],
             'value': estimated_value
         }
@@ -103,7 +112,7 @@ class RequestCoreService(object):
     def create_request_as_payer(self, id_addresses, amounts,
                                 payment_addresses, payer_refund_address, payer_id_address,
                                 data=None,
-                                creation_payments=None, additional_payments=None, options=None):
+                                creation_payments=None, additional_payments=None):
         """
         :param id_addresses:
         :param amounts:
@@ -111,15 +120,14 @@ class RequestCoreService(object):
         :param payer_refund_address:
         :param payer_id_address:
         :param data:
-        :param creation_payments: Amount to pay when Requst is created
+        :param creation_payments: Amount to pay when Request is created
         :param additional_payments: Additional amount to pay each payee, on top of expected amount
         :param options:
         :return:
         """
-        # validate request
-        # get collection/value estimation
-        # store file in ipfs
-        # call contract
+        payment_addresses = [
+            Web3.toChecksumAddress(a) if a else EMPTY_BYTES_20 for a in payment_addresses
+        ]
         creation_payments = creation_payments if creation_payments else []
         additional_payments = additional_payments if additional_payments else []
 
@@ -166,7 +174,7 @@ class RequestCoreService(object):
                 )
 
         # call fee estimator, set as value for tx
-        currency_contract_data = self.get_currency_contract_data()
+        currency_contract_data = self._get_currency_contract_data()
         currency_contract = currency_contract_data['instance']
         estimated_value = currency_contract.functions.collectEstimation(
             _expectedAmount=sum(a for a in creation_payments)
@@ -190,15 +198,17 @@ class RequestCoreService(object):
     def create_signed_request(self, currency_contract_address, id_addresses, amounts,
                               payment_addresses, expiration_date,
                               data=None):
-        """ Return the signed request object.
+        """ Create a Signed Request.
 
-        TODO this only supports creating the Request as the payee.
-
-        :param currency_contract_address:
-        :param id_addresses:
-        :param amounts:
-        :param expiration_date:
-        :param payment_addresses:
+        :param currency_contract_address: Address of the currency contract for this
+            Request's currency
+        :param id_addresses: List of Ethereum addresses identifying the recipients
+        :type id_addresses: [str]
+        :param amounts: List of payment amounts
+        :type amounts: [int]
+        :param payment_addresses: List of Ethereum addresses to which funds will be paid
+        :type payment_addresses: [str]
+        :param expiration_date: Unix timestamp after which Request can no longer be broadcast
         :param data: Additional data to store with the Request
         :return:
         """
@@ -263,6 +273,7 @@ class RequestCoreService(object):
         parsed_payee_payment_addresses = [
             Web3.toChecksumAddress(a) if a else EMPTY_BYTES_20 for a in payment_addresses
         ]
+
         id_addresses = [
             Web3.toChecksumAddress(a) for a in id_addresses
         ]
@@ -295,7 +306,7 @@ class RequestCoreService(object):
                     '{} is not a valid Ethereum address'.format(address)
                 )
 
-        currency_contract_data = self.get_currency_contract_data()
+        currency_contract_data = self._get_currency_contract_data()
         return self.create_signed_request(
             currency_contract_address=currency_contract_data['address'],
             id_addresses=id_addresses,

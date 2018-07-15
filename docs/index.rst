@@ -11,12 +11,15 @@ Contents
 --------
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
 
     quickstart
     scripts
     request_network_api
     artifact_manager
+    services/core
+    services/ERC20
+    services/ethereum
 
 
 Indices and tables
