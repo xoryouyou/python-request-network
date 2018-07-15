@@ -224,6 +224,7 @@ class GetRequestTestCase(unittest.TestCase):
         self.request_api = RequestNetwork()
 
     def test_hash_request_object(self):
+        # TODO integration test, relies on request network js tests
         request = self.request_api.get_request_by_transaction_hash(
             '0x1f97459c45402fcb6562410cf4b4253a9d5d9528f247a892f9bddeefdd878b2d')
         # Manually add the expiration date as it is not stored on the contract
@@ -231,6 +232,7 @@ class GetRequestTestCase(unittest.TestCase):
         hash_request_object(request)
 
     def test_get_request_by_id(self):
+        # TODO integration test, relies on request network js tests
         request = self.request_api.get_request_by_id(
             '0x8cdaf0cd259887258bc13a92c0a6da92698644c0000000000000000000000050')
         self.assertEqual(
@@ -248,6 +250,7 @@ class GetRequestTestCase(unittest.TestCase):
                 '0x8cdaf0cd259887258bc13a92c0a6da92698644c0000000000000000000000000')
 
     def test_get_request_by_transaction_hash(self):
+        # TODO integration test, relies on request network js tests
         request = self.request_api.get_request_by_transaction_hash(
             '0x8d3ec9ef287f09577707bd8ffe7f053394d4cb5355f62495886dbd4a5589971b')
         self.assertEqual(
