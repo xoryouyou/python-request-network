@@ -178,7 +178,17 @@ class RequestNetwork(object):
             'payee_id_address', 'amount', 'balance'
         ])
 
-        request_data = RequestContractData(*core_contract.functions.getRequest(request_id).call())
+        try:
+            request_data = RequestContractData(*core_contract.functions.getRequest(
+                request_id).call())
+        except ValueError:
+            # web3 will raise a ValueError if the contract at core_contract_address is not
+            # a valid contract address. This could happen if the given Request ID contains
+            # an invalid core_contract_address, so we treat it as an invalid Request ID.
+            raise RequestNotFound('Request ID {} has an invalid core contract address {}'.format(
+                request_id,
+                core_contract_address
+            ))
 
         if request_data.payer_address == EMPTY_BYTES_20:
             raise RequestNotFound('Request ID {} not found on core contract {}'.format(
