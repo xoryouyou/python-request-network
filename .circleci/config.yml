@@ -35,7 +35,9 @@ jobs:
             REQUEST_NETWORK_ETHEREUM_NETWORK_NAME: "rinkeby"
           command: |
             . .venv/bin/activate
-            env
+            # The env var can not be set at the step-level as that would expose the key,
+            # and CircleCI does not support env var interpolation in config.yml.
+            export WEB3_PROVIDER_URI=${RINKEBY_WEB3_PROVIDER_URI}
             make test_rinkeby
       - run:
           name: Get artifacts.json for hashing
