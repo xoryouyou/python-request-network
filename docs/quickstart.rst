@@ -104,9 +104,9 @@ does not contain any extra data we do not need to configure IPFS.
     from request_network import types
     from request_network.currencies import currencies_by_symbol
 
-    # Inject the POA middleware so we can work with Rinkeby
     from request_network.utils import hash_request_object
 
+    # Inject the POA middleware so we can work with Rinkeby
     w3.middleware_stack.inject(geth_poa_middleware, layer=0)
 
     request_api = RequestNetwork()
@@ -114,7 +114,6 @@ does not contain any extra data we do not need to configure IPFS.
     # Generate a Request which will send 0.0001 ETH to the recipient
     payee = types.Payee(
         id_address='0x821aea9a577a9b44299b9c15c88cf3087f3b5544',
-        payment_address=None,
         amount=int(0.0001 * 10 ** 18)  # 0.0001 ETH in Wei
     )
 

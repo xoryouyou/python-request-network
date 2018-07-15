@@ -53,10 +53,13 @@ class RequestNetwork(object):
     def create_request(self, role, currency, payees, payer, data=None):
         """ Create a Request.
 
+        If the Request is being created by the payer it is possible to create
+        it and pay in a single transaction, using the `Payee.payment_amount`
+        and `Payee.additional_amount` parameters.
+
         Note that this method broadcasts the transaction which will create the
         Request, but does not confirm that the transaction is included in the
-        block. It is the responsiblity of the caller to ensure this transaction
-        attains a specific number of confirmations.
+        block.
 
         :param role: Role of the caller, i.e. Payer or Payee
         :type role: types.Roles.PAYEE
@@ -68,8 +71,6 @@ class RequestNetwork(object):
         :type payer: types.Payer
         :param data: Optional dictionary of data which will be stored on IPFS
         :type data: dict
-        :param options: Dictionary of options (not yet supported)
-        :type options: dict
         :return: The transaction hash of the transaction which, if successfully
             included in a block, will create this Request.
         """
