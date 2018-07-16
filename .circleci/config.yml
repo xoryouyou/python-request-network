@@ -79,7 +79,7 @@ jobs:
       - restore_cache:
           key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
       - run:
-          name: install python dependencies
+          name: Install python dependencies
           command: |
             python3 -m venv .venv
             . .venv/bin/activate
@@ -90,13 +90,13 @@ jobs:
           paths:
             - ".venv"
       - run:
-          name: verify git tag and create packages
+          name: Verify git tag and create packages
           command: |
             . .venv/bin/activate
             python setup.py verify_git_tag
             make prepare_release
       - run:
-          name: upload to pypi
+          name: Upload to PyPi
           command: |
             . .venv/bin/activate
             twine upload dist/*

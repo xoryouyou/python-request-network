@@ -90,6 +90,7 @@ class TestCreateRequestAsPayee(unittest.TestCase):
             'selling cool stuff',
             request.data['reason']
         )
+        self.assertTrue(request.is_broadcast)
 
     def test_create_request_as_payer(self):
         tx_hash = self.request_api.create_request(
@@ -113,3 +114,4 @@ class TestCreateRequestAsPayee(unittest.TestCase):
             'buying cool stuff',
             request.data['reason']
         )
+        self.assertTrue(request.is_broadcast)

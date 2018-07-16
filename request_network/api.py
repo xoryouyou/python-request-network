@@ -59,7 +59,9 @@ class RequestNetwork(object):
 
         Note that this method broadcasts the transaction which will create the
         Request, but does not confirm that the transaction is included in the
-        block.
+        block. The Request's `is_broadcast` property can be used to check this -
+        it will be True if the Request can be successfully retrieved from
+        the blockchain using its transaction hash.
 
         :param role: Role of the caller, i.e. Payer or Payee
         :type role: types.Roles.PAYEE

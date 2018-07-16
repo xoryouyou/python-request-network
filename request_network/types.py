@@ -16,6 +16,9 @@ from request_network.constants import (
     EMPTY_BYTES_20,
     PAYMENT_GATEWAY_BASE_URL,
 )
+from request_network.exceptions import (
+    RequestNotFound,
+)
 
 
 class Roles(IntEnum):
@@ -126,6 +129,20 @@ class Request(object):
     @property
     def id_addresses(self):
         return [p.id_address for p in self.payees]
+
+    @property
+    def is_broadcast(self):
+        """ Returns True if this Request can be successfully retrieved from the blockchain.
+        """
+        from request_network.api import RequestNetwork
+        request_api = RequestNetwork()
+        try:
+            request = request_api.get_request_by_transaction_hash(self.transaction_hash)
+        except RequestNotFound:
+            return False
+
+        # TODO validate other parameters? Hash the Request and compare hashes?
+        return request.id == self.id
 
     @property
     def is_paid(self):
