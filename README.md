@@ -2,4 +2,4 @@
 
 A work-in-progress Python implementation of the [Request Network](https://request.network) API.
 
-[Documentation](https://request-network.readthedocs.io/en/latest/) is hosted on Read The Docs.
+[Documentation](https://python-request-network.readthedocs.io/en/latest/) is hosted on Read The Docs.
